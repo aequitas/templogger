@@ -11,6 +11,7 @@ from umqtt.simple import MQTTClient
 
 ADC_NUM = 1
 PIN_1W = 12
+MIN_INTERVAL = 1
 INTERVAL_SEC = 60
 CONNECT_WAIT = 10
 MQTT_SERVER = 'mqtt'
@@ -29,7 +30,7 @@ def mqtt_send(values):
     mqtt.connect()
     for name, raw_value in values.items():
         if isinstance(raw_value, float):
-            value = b"{:4.2f}".format(raw_value)
+            value = b"{:4.3f}".format(raw_value)
         elif isinstance(raw_value, int):
             value = b"{:d}".format(raw_value)
         elif isinstance(raw_value, str):
@@ -64,15 +65,17 @@ def wait_connect():
     for x in range(CONNECT_WAIT):
         wlan = network.WLAN(network.STA_IF)
         if wlan.isconnected():
-            break
+            return True
         time.sleep(1)
+    else:
+        return False
 
 
 def deepsleep(uptime=0):
     """Put to sleep for 60 seconds minus uptime."""
     rtc = machine.RTC()
     rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
-    rtc.alarm(rtc.ALARM0, (INTERVAL_SEC * 1000) - uptime)
+    rtc.alarm(rtc.ALARM0, max(MIN_INTERVAL, (INTERVAL_SEC * 1000) - uptime))
     machine.deepsleep()
 
 
@@ -85,9 +88,9 @@ def templog(sleep=True):
     values.update(read_temps())
     print(values)
 
-    wait_connect()
-
-    mqtt_send(values)
+    # send values over MQTT if connected, otherwise silently pass
+    if wait_connect():
+        mqtt_send(values)
 
     if sleep:
         delta = time.ticks_diff(start, time.ticks_ms())

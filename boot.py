@@ -3,6 +3,7 @@
 # esp.osdebug(None)
 import machine
 
+# switch between normal and repl mode depending on pin12 pulldown
 pin = machine.Pin(12, machine.Pin.IN)
 if pin.value():
     import templog
