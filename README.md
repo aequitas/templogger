@@ -1,7 +1,5 @@
 Low-power Micropython MQTT temperature logger for DS18B20 and ESP8266 (Banggood ESP12E) running on 18650 Lipo.
 
-![Overview](templogger.png)
-
 Features:
 
 - Temperature sensor
@@ -12,6 +10,8 @@ Features:
 - Logging to MQTT
 - Multiple sensor support
 - Webrepl alternative boot
+
+![Overview](templogger.jpg)
 
 # Functionality
 This firmware is configured to run the following steps at boot:
@@ -67,7 +67,7 @@ The following connections need to be made:
 
 ![ESP12E pinout](http://simba-os.readthedocs.io/en/latest/_images/esp12e-pinout.png)
 
-![Circuit overview](circuit.png)
+![Circuit overview](circuit.jpg)
 
 Not shown on picture a wire between `VDD` and `CH_PD`!
 
@@ -103,3 +103,30 @@ To return to normal templogging mode powercycle the device or run: `import machi
 
 # Battery voltage level
 To allow measurement of battery voltage instead of ADC input pin run `adc_vdd.py` once. This will configure the ADC to allow reading the voltage accross `gnd` and `vdd`.
+
+# Home assistant
+This device is used in combination with [Home-assistant](https://home-assistant.io/), configuration example:
+
+    mqtt:
+      broker: localhost
+
+    sensor:
+      - name: temp_sensor
+        platform: mqtt
+        state_topic: "templog/9b80e600/280d7427050000e5"
+        unit_of_measurement: °C
+      - name: temp_sensor_battery
+        platform: mqtt
+        state_topic: "templog/9b80e600/battery"
+      - name: temp_sensor_voltage
+        platform: mqtt
+        state_topic: "templog/9b80e600/voltage"
+        unit_of_measurement: V
+
+    group:
+      temp_sensor:
+        name: Mobile temperature sensor
+        entities:
+          - sensor.temp_sensor
+          - sensor.temp_sensor_battery
+          - sensor.temp_sensor_voltage
