@@ -22,12 +22,31 @@ def rom_to_hex(rom):
     return ''.join('{:02x}'.format(x) for x in rom)
 
 
+pong = None
+
+
 def mqtt_send(values):
     """Send key/value pairs over mqtt."""
     device_name = rom_to_hex(bytearray(machine.unique_id()))
 
     mqtt = MQTTClient(device_name, MQTT_SERVER)
     mqtt.connect()
+
+    # do mqtt ping/pong to ensure communication with broker is ok
+    for x in range(CONNECT_WAIT):
+        mqtt.ping()
+
+        mqtt.sock.setblocking(False)
+        res = mqtt.sock.read(1)
+
+        if res == b"\xd0":
+            sz = mqtt.sock.read(1)[0]
+            if sz == 0:
+                break
+        time.sleep(1)
+    else:
+        return False
+
     for name, raw_value in values.items():
         if isinstance(raw_value, float):
             value = b"{:4.3f}".format(raw_value)
@@ -65,17 +84,19 @@ def wait_connect():
     for x in range(CONNECT_WAIT):
         wlan = network.WLAN(network.STA_IF)
         if wlan.isconnected():
+            print(wlan.ifconfig())
             return True
         time.sleep(1)
     else:
         return False
 
 
-def deepsleep(uptime=0):
+def deepsleep(uptime=0, calibrate=False):
     """Put to sleep for 60 seconds minus uptime."""
     rtc = machine.RTC()
     rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
-    rtc.alarm(rtc.ALARM0, max(MIN_INTERVAL, (INTERVAL_SEC * 1000) - uptime))
+    sleeptime = max(MIN_INTERVAL, (INTERVAL_SEC * 1000) - uptime)
+    rtc.alarm(rtc.ALARM0, sleeptime)
     machine.deepsleep()
 
 
@@ -88,9 +109,13 @@ def templog(sleep=True):
     values.update(read_temps())
     print(values)
 
-    # send values over MQTT if connected, otherwise silently pass
+    # send values over MQTT if connected
     if wait_connect():
-        mqtt_send(values)
+        if not mqtt_send(values):
+            machine.reset()
+    else:
+        # failed to connect, reboot
+        machine.reset()
 
     if sleep:
         delta = time.ticks_diff(start, time.ticks_ms())
